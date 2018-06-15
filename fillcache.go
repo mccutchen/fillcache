@@ -1,3 +1,9 @@
+// Package `fillcache` is an in-process cache with single-flight filling
+// semantics.
+//
+// In short: Given a function that computes the value to be cached for a key,
+// it will ensure that the function is called only once per key no matter how
+// many concurrent cache gets are issued for a key.
 package fillcache
 
 import (
