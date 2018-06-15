@@ -48,7 +48,7 @@ func (t *testFiller) callCount(key string) int {
 	return t.callCounts[key]
 }
 
-func (t *testFiller) fill(ctx context.Context, key string) (interface{}, error) {
+func (t *testFiller) fillFunc(ctx context.Context, key string) (interface{}, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.callCounts[key]++
@@ -67,7 +67,7 @@ func (t *testFiller) fill(ctx context.Context, key string) (interface{}, error) 
 
 func TestGetFillsCache(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 10*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 	ctx := context.Background()
 
 	// first get should compute the expected result
@@ -101,7 +101,7 @@ func TestGetFillsCache(t *testing.T) {
 
 func TestParallelGetFillsCacheOnce(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -127,7 +127,7 @@ func TestParallelGetFillsCacheOnce(t *testing.T) {
 
 func TestGetRespectsContexts(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 50*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	baseCtx := context.Background()
 
@@ -167,7 +167,7 @@ func TestGetDoesNotCacheOnError(t *testing.T) {
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 10*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	_, err := c.Get(context.Background(), "foo")
 	if err == nil || err.Error() != "error" {
@@ -183,7 +183,7 @@ func TestGetPropagatesErrorsToAllCallers(t *testing.T) {
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 100*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -205,7 +205,7 @@ func TestGetPropagatesErrorsToAllCallers(t *testing.T) {
 
 func TestUpdateRespectsContexts(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 50*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	baseCtx := context.Background()
 
@@ -234,7 +234,7 @@ func TestUpdateDoesNotCacheOnError(t *testing.T) {
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 10*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	_, err := c.Update(context.Background(), "foo")
 	if err == nil || err.Error() != "error" {
@@ -247,7 +247,7 @@ func TestUpdateDoesNotCacheOnError(t *testing.T) {
 
 func TestParallelUpdateFillsCacheOnce(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	var wg sync.WaitGroup
 	var updateCount int64
@@ -276,7 +276,7 @@ func TestParallelUpdateFillsCacheOnce(t *testing.T) {
 
 func TestParallelGetsAndUpdatesFillCacheOnce(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -309,7 +309,7 @@ func TestParallelGetsAndUpdatesFillCacheOnce(t *testing.T) {
 
 func TestWaiterRespectsContexts(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := NewFillCache(f.fill)
+	c := New(f.fillFunc)
 
 	var wg sync.WaitGroup
 

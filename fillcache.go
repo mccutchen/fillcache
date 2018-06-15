@@ -15,9 +15,8 @@ type FillCache struct {
 	mu sync.Mutex
 }
 
-// NewFillCache creates a FillCache whose entries will be computed by the given
-// FillFunc
-func NewFillCache(fillFunc FillFunc) *FillCache {
+// New creates a FillCache whose entries will be computed by the given FillFunc
+func New(fillFunc FillFunc) *FillCache {
 	return &FillCache{
 		fillFunc: fillFunc,
 		cache:    make(map[string]interface{}),
