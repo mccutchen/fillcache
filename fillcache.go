@@ -1,4 +1,4 @@
-// Package `fillcache` is an in-process cache with single-flight filling
+// Package fillcache is an in-process cache with single-flight filling
 // semantics.
 //
 // In short: Given a function that computes the value to be cached for a key,

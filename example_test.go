@@ -9,10 +9,10 @@ import (
 	"github.com/mccutchen/fillcache"
 )
 
-// ExampleUsage demonstrates basic usage of fillcache by simulating a
-// "thundering herd" of 10 concurrent cache gets that result in only a single
-// call to the cache filling function.
-func ExampleUsage() {
+// Example demonstrates basic usage of fillcache by simulating a "thundering
+// herd" of 10 concurrent cache gets that result in only a single call to the
+// cache filling function.
+func Example() {
 	var (
 		key       = "foo"
 		val       = 42
