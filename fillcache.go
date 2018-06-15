@@ -5,39 +5,6 @@ import (
 	"sync"
 )
 
-// waiter represents an outstanding computation that will fill a cache entry
-type waiter struct {
-	val interface{}
-	err error
-
-	wg sync.WaitGroup
-}
-
-func (w *waiter) wait(ctx context.Context) (interface{}, error) {
-	done := make(chan struct{})
-	go func() {
-		w.wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-done:
-		return w.val, w.err
-	}
-}
-
-func (w *waiter) finish(val interface{}, err error) {
-	w.val = val
-	w.err = err
-	w.wg.Done()
-}
-
-// FillFunc is a function that computes the value of a cache entry given a
-// string key
-type FillFunc func(context.Context, string) (interface{}, error)
-
 // FillCache is a cache whose entries are calculated and filled on-demand
 type FillCache struct {
 	fillFunc FillFunc
@@ -57,6 +24,10 @@ func NewFillCache(fillFunc FillFunc) *FillCache {
 		inflight: make(map[string]*waiter),
 	}
 }
+
+// FillFunc is a function that computes the value of a cache entry given a
+// string key
+type FillFunc func(context.Context, string) (interface{}, error)
 
 // Get returns the cache value for the given key, computing it as necessary
 func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
@@ -121,4 +92,33 @@ func (c *FillCache) Update(ctx context.Context, key string) (bool, error) {
 		return true, nil
 	}
 	return false, w.err
+}
+
+// waiter represents an outstanding computation that will fill a cache entry
+type waiter struct {
+	val interface{}
+	err error
+
+	wg sync.WaitGroup
+}
+
+func (w *waiter) wait(ctx context.Context) (interface{}, error) {
+	done := make(chan struct{})
+	go func() {
+		w.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-done:
+		return w.val, w.err
+	}
+}
+
+func (w *waiter) finish(val interface{}, err error) {
+	w.val = val
+	w.err = err
+	w.wg.Done()
 }
