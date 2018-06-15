@@ -49,8 +49,8 @@ func (t *testFiller) callCount(key string) int {
 
 func (t *testFiller) fillFunc(ctx context.Context, key string) (interface{}, error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.callCounts[key]++
+	t.mu.Unlock()
 
 	select {
 	case <-ctx.Done():
@@ -352,5 +352,54 @@ func TestWaiterRespectsContexts(t *testing.T) {
 	}
 	if val := result.(int); val != 1 {
 		t.Errorf("expected result = 1, got %v", val)
+	}
+}
+
+func TestFillSuccessDeterminedByFirstContext(t *testing.T) {
+	// A test that captures a potentially confusing corner case: A cache fill
+	// respects the timeout (or not) of the context that triggered the fill.
+	//
+	// This test is basically the opposite of TestWaiterRespectsContexts:
+	//
+	// Given a fill func that will take 200ms to return, spin up two goroutines
+	// to get the same cache key concurrently. The first applies a short
+	// timeout, so the cache fill will fail. The second applies no timeout, but
+	// will be waiting on the same cache fill and so will also fail.
+	//
+	// Afterwards, the cache will still be empty.
+	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
+	c := New(f.fillFunc)
+
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		_, err := c.Get(ctx, "foo")
+		if err == nil {
+			t.Errorf("goroutine 1 expected error")
+		}
+	}()
+
+	// wait to ensure that the first goroutine starts before the second
+	<-time.After(1 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		_, err := c.Get(context.Background(), "foo")
+		if err == nil {
+			t.Errorf("goroutine 2 expected error")
+		}
+	}()
+
+	wg.Wait()
+	if count := f.callCount("foo"); count != 1 {
+		t.Errorf("expected %d call to fill func, got %d", 1, count)
+	}
+
+	if len(c.cache) != 0 {
+		t.Errorf("expected empty cache after fill failures, got cache size %d", len(c.cache))
 	}
 }
