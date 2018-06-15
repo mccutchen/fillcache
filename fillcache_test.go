@@ -300,6 +300,17 @@ func TestParallelGetsAndUpdatesFillCacheOnce(t *testing.T) {
 }
 
 func TestWaiterRespectsContexts(t *testing.T) {
+	// A test to ensure that a waiter will respect the timeout in the context
+	// it is given.
+	//
+	// Given a fill func that will take 200ms to return, spin up two goroutines
+	// to get the same cache key concurrently. The first goroutine applies no
+	// timeout, so it should succeed in filling the cache and getting a result.
+	// The second applies a 5ms timeout, so it should fail while waiting for
+	// the cache fill to complete.
+	//
+	// The cache fill should succeed, because there was no timeout applied to
+	// the context that triggered the fill.
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
 	c := New(f.fillFunc)
 
@@ -313,6 +324,10 @@ func TestWaiterRespectsContexts(t *testing.T) {
 			t.Errorf("goroutine 1 got unexpected error: %s", err)
 		}
 	}()
+
+	// wait to ensure that the first goroutine starts before the second
+	<-time.After(1 * time.Millisecond)
+
 	go func() {
 		defer wg.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
@@ -326,5 +341,16 @@ func TestWaiterRespectsContexts(t *testing.T) {
 	wg.Wait()
 	if count := f.callCount("foo"); count != 1 {
 		t.Errorf("expected %d call to fill func, got %d", 1, count)
+	}
+
+	// ensure that the cache has been filled correctly
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+	result, err := c.Get(ctx, "foo")
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	if val := result.(int); val != 1 {
+		t.Errorf("expected result = 1, got %v", val)
 	}
 }

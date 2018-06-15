@@ -44,7 +44,7 @@ func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
 func (c *FillCache) Update(ctx context.Context, key string) (interface{}, error) {
 	c.mu.Lock()
 
-	// Another goroutine is updating this entry, so we don't need to
+	// Another goroutine is updating this entry, just wait for it to finish
 	if w, waiting := c.inflight[key]; waiting {
 		c.mu.Unlock()
 		return w.wait(ctx)
