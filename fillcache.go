@@ -31,16 +31,26 @@ type FillFunc func(context.Context, string) (interface{}, error)
 // Get returns the cache value for the given key, computing it as necessary
 func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
 	c.mu.Lock()
-	if val, found := c.cache[key]; found {
-		c.mu.Unlock()
+	val, found := c.cache[key]
+	c.mu.Unlock()
+	if found {
 		return val, nil
 	}
+	return c.Update(ctx, key)
+}
 
+// Update recomputes, stores, and returns the value for the given key. If an
+// error occurs, the cache is not updated.
+func (c *FillCache) Update(ctx context.Context, key string) (interface{}, error) {
+	c.mu.Lock()
+
+	// Another goroutine is updating this entry, so we don't need to
 	if w, waiting := c.inflight[key]; waiting {
 		c.mu.Unlock()
 		return w.wait(ctx)
 	}
 
+	// Otherwise, we'll update this entry ourselves
 	w := &waiter{}
 	w.wg.Add(1)
 	c.inflight[key] = w
@@ -58,39 +68,6 @@ func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
 		c.cache[key] = val
 	}
 	return val, err
-}
-
-// Update recomputes the value for the given key, unless another goroutine is
-// already computing the value, and returns a bool indicating whether the value
-// was updated
-func (c *FillCache) Update(ctx context.Context, key string) (bool, error) {
-	c.mu.Lock()
-
-	// Another goroutine is updating this entry, so we don't need to
-	if _, waiting := c.inflight[key]; waiting {
-		c.mu.Unlock()
-		return false, nil
-	}
-
-	// Otherwise, we'll update this entry ourselves
-	w := &waiter{}
-	w.wg.Add(1)
-	c.inflight[key] = w
-	c.mu.Unlock()
-
-	val, err := c.fillFunc(ctx, key)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	w.finish(val, err)
-	delete(c.inflight, key)
-
-	if w.err == nil {
-		c.cache[key] = w.val
-		return true, nil
-	}
-	return false, w.err
 }
 
 // waiter represents an outstanding computation that will fill a cache entry

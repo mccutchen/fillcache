@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -220,11 +219,11 @@ func TestUpdateRespectsContexts(t *testing.T) {
 	}
 
 	// now give it time to fill the cache
-	updated, err := c.Update(baseCtx, "foo")
+	_, err = c.Update(baseCtx, "foo")
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
-	if !updated {
+	if len(c.cache) != 1 {
 		t.Errorf("expected cache to be updated")
 	}
 }
@@ -250,17 +249,13 @@ func TestParallelUpdateFillsCacheOnce(t *testing.T) {
 	c := New(f.fillFunc)
 
 	var wg sync.WaitGroup
-	var updateCount int64
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			updated, err := c.Update(context.Background(), "foo")
+			_, err := c.Update(context.Background(), "foo")
 			if err != nil {
 				t.Errorf("goroutine %d got unexpected error: %s", i, err)
-			}
-			if updated {
-				atomic.AddInt64(&updateCount, 1)
 			}
 		}(i)
 	}
@@ -268,9 +263,6 @@ func TestParallelUpdateFillsCacheOnce(t *testing.T) {
 	wg.Wait()
 	if count := f.callCount("foo"); count != 1 {
 		t.Errorf("expected %d call to fill func, got %d", 1, count)
-	}
-	if updateCount > 1 {
-		t.Errorf("expected %d goroutines to update cache, got %d", 1, updateCount)
 	}
 }
 
