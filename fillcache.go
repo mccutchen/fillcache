@@ -1,9 +1,9 @@
 // Package fillcache is an in-process cache with single-flight filling
 // semantics.
 //
-// In short: Given a function that computes the value to be cached for a key,
-// it will ensure that the function is called only once per key no matter how
-// many concurrent cache gets are issued for a key.
+// In short: Given a function that computes the value a cache key, it will
+// ensure that the function is called only once per key no matter how many
+// concurrent cache gets are issued for a key.
 package fillcache
 
 import (
@@ -14,23 +14,24 @@ import (
 
 // FillCache is a cache whose entries are calculated and filled on-demand
 type FillCache struct {
+	// a function that knows how to compute the value for a cache key
+	filler Filler
+
 	// an optional TTL for cache entries; if unset, cache entries never
 	// expire
 	ttl time.Duration
 
-	fillFunc FillFunc
-
 	cache    map[string]*cacheEntry
-	inflight map[string]*waiter
+	inflight map[string]*fillRequest
 	mu       sync.Mutex
 }
 
-// New creates a FillCache whose entries will be computed by the given FillFunc
-func New(fillFunc FillFunc, opts ...Option) *FillCache {
+// New creates a FillCache whose entries will be computed by the given Filler
+func New(filler Filler, opts ...Option) *FillCache {
 	c := &FillCache{
-		fillFunc: fillFunc,
+		filler:   filler,
 		cache:    make(map[string]*cacheEntry),
-		inflight: make(map[string]*waiter),
+		inflight: make(map[string]*fillRequest),
 	}
 	for _, o := range opts {
 		o(c)
@@ -38,9 +39,8 @@ func New(fillFunc FillFunc, opts ...Option) *FillCache {
 	return c
 }
 
-// FillFunc is a function that computes the value of a cache entry given a
-// string key
-type FillFunc func(context.Context, string) (interface{}, error)
+// Filler is a function that computes the value to cache for a given key
+type Filler func(ctx context.Context, key string) (val interface{}, err error)
 
 // Get returns the cache value for the given key, computing it as necessary
 func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
@@ -55,6 +55,8 @@ func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
 
 // Update recomputes, stores, and returns the value for the given key. If an
 // error occurs, the cache is not updated.
+//
+// Can be used to proactively update cache entries without waiting for a Get.
 func (c *FillCache) Update(ctx context.Context, key string) (interface{}, error) {
 	c.mu.Lock()
 
@@ -65,17 +67,17 @@ func (c *FillCache) Update(ctx context.Context, key string) (interface{}, error)
 	}
 
 	// Otherwise, we'll update this entry ourselves
-	w := &waiter{}
-	w.wg.Add(1)
-	c.inflight[key] = w
+	r := &fillRequest{}
+	r.wg.Add(1)
+	c.inflight[key] = r
 	c.mu.Unlock()
 
-	val, err := c.fillFunc(ctx, key)
+	val, err := c.filler(ctx, key)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	w.finish(val, err)
+	r.finish(val, err)
 	delete(c.inflight, key)
 
 	if err == nil {
@@ -105,6 +107,7 @@ func newCacheEntry(val interface{}, ttl time.Duration) *cacheEntry {
 	}
 }
 
+// cacheEntry captures a cached value and its optional expiration time
 type cacheEntry struct {
 	val       interface{}
 	expiresAt time.Time
@@ -114,18 +117,19 @@ func (e *cacheEntry) expired() bool {
 	return !e.expiresAt.IsZero() && e.expiresAt.Before(time.Now())
 }
 
-// waiter represents an outstanding computation that will fill a cache entry
-type waiter struct {
+// fillRequest represents an outstanding computation of the value for a cache
+// key
+type fillRequest struct {
 	val interface{}
 	err error
 
 	wg sync.WaitGroup
 }
 
-func (w *waiter) wait(ctx context.Context) (interface{}, error) {
+func (r *fillRequest) wait(ctx context.Context) (interface{}, error) {
 	done := make(chan struct{})
 	go func() {
-		w.wg.Wait()
+		r.wg.Wait()
 		close(done)
 	}()
 
@@ -133,12 +137,12 @@ func (w *waiter) wait(ctx context.Context) (interface{}, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-done:
-		return w.val, w.err
+		return r.val, r.err
 	}
 }
 
-func (w *waiter) finish(val interface{}, err error) {
-	w.val = val
-	w.err = err
-	w.wg.Done()
+func (r *fillRequest) finish(val interface{}, err error) {
+	r.val = val
+	r.err = err
+	r.wg.Done()
 }
