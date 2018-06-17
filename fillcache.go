@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-// FillCache is a cache whose entries are calculated and filled on-demand
-type FillCache struct {
+// Cache is a cache whose entries are calculated and filled on-demand
+type Cache struct {
 	// a function that knows how to compute the value for a cache key
 	filler Filler
 
@@ -27,8 +27,8 @@ type FillCache struct {
 }
 
 // New creates a FillCache whose entries will be computed by the given Filler
-func New(filler Filler, opts ...Option) *FillCache {
-	c := &FillCache{
+func New(filler Filler, opts ...Option) *Cache {
+	c := &Cache{
 		filler:   filler,
 		cache:    make(map[string]*cacheEntry),
 		inflight: make(map[string]*fillRequest),
@@ -43,7 +43,7 @@ func New(filler Filler, opts ...Option) *FillCache {
 type Filler func(ctx context.Context, key string) (val interface{}, err error)
 
 // Get returns the cache value for the given key, computing it as necessary
-func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
+func (c *Cache) Get(ctx context.Context, key string) (interface{}, error) {
 	c.mu.Lock()
 	entry, found := c.cache[key]
 	c.mu.Unlock()
@@ -57,7 +57,7 @@ func (c *FillCache) Get(ctx context.Context, key string) (interface{}, error) {
 // error occurs, the cache is not updated.
 //
 // Can be used to proactively update cache entries without waiting for a Get.
-func (c *FillCache) Update(ctx context.Context, key string) (interface{}, error) {
+func (c *Cache) Update(ctx context.Context, key string) (interface{}, error) {
 	c.mu.Lock()
 
 	// Another goroutine is updating this entry, just wait for it to finish
@@ -87,11 +87,11 @@ func (c *FillCache) Update(ctx context.Context, key string) (interface{}, error)
 }
 
 // Option can be used to configure a FillCache instance
-type Option func(c *FillCache)
+type Option func(c *Cache)
 
 // TTL sets the TTL for all cache entries
 func TTL(ttl time.Duration) Option {
-	return func(c *FillCache) {
+	return func(c *Cache) {
 		c.ttl = ttl
 	}
 }
