@@ -403,3 +403,26 @@ func TestFillSuccessDeterminedByFirstContext(t *testing.T) {
 		t.Errorf("expected empty cache after fill failures, got cache size %d", len(c.cache))
 	}
 }
+
+func TestExpiration(t *testing.T) {
+	key := "foo"
+	val := 1
+	ttl := 25 * time.Millisecond
+	f := newSimpleFiller(key, val, time.Duration(0))
+	c := New(f.fillFunc, TTL(ttl))
+
+	for i := 0; i < 15; i++ {
+		result, err := c.Get(context.Background(), key)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if got := result.(int); got != val {
+			t.Fatalf("expected val %d, got %d", val, got)
+		}
+		<-time.After(2 * time.Millisecond)
+	}
+
+	if count := f.callCount(key); count != 2 {
+		t.Errorf("expected 2 calls to fill func, got %d", count)
+	}
+}
