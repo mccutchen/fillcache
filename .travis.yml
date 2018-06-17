@@ -1,14 +1,11 @@
 language: go
 go:
-- 1.9
+- '1.9'
 - '1.10'
-- tip
 script:
-  - make testci
   # from https://docs.coveralls.io/go
-  - go test -v -covermode=count -coverprofile=coverage.out
+  - GO_TEST_ARGS="-coverprofile=coverage.out" make test
   - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
-
 before_install:
 - go get golang.org/x/lint/golint
 - go get golang.org/x/tools/cmd/cover
