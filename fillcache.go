@@ -56,7 +56,8 @@ func (c *Cache) Get(ctx context.Context, key string) (interface{}, error) {
 // Update recomputes, stores, and returns the value for the given key. If an
 // error occurs, the cache is not updated.
 //
-// Can be used to proactively update cache entries without waiting for a Get.
+// Update can be used to proactively update cache entries without waiting for a
+// Get.
 func (c *Cache) Update(ctx context.Context, key string) (interface{}, error) {
 	c.mu.Lock()
 
@@ -93,14 +94,20 @@ func (c *Cache) Size() int {
 	return len(c.cache)
 }
 
-// Option can be used to configure a FillCache instance
+// Option can be used to configure a Cache instance
 type Option func(c *Cache)
 
-// TTL sets the TTL for all cache entries
+// TTL sets the expiration time for each cache entry
 func TTL(ttl time.Duration) Option {
 	return func(c *Cache) {
 		c.ttl = ttl
 	}
+}
+
+// cacheEntry captures a cached value and its optional expiration time
+type cacheEntry struct {
+	val       interface{}
+	expiresAt time.Time
 }
 
 func newCacheEntry(val interface{}, ttl time.Duration) *cacheEntry {
@@ -112,12 +119,6 @@ func newCacheEntry(val interface{}, ttl time.Duration) *cacheEntry {
 		val:       val,
 		expiresAt: expiresAt,
 	}
-}
-
-// cacheEntry captures a cached value and its optional expiration time
-type cacheEntry struct {
-	val       interface{}
-	expiresAt time.Time
 }
 
 func (e *cacheEntry) expired() bool {
