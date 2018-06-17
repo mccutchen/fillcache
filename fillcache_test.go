@@ -1,4 +1,4 @@
-package fillcache
+package fillcache_test
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mccutchen/fillcache"
 )
 
 type result struct {
@@ -66,7 +68,7 @@ func (t *testFiller) filler(ctx context.Context, key string) (interface{}, error
 
 func TestGetFillsCache(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 10*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 	ctx := context.Background()
 
 	// first get should compute the expected result
@@ -100,7 +102,7 @@ func TestGetFillsCache(t *testing.T) {
 
 func TestParallelGetFillsCacheOnce(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -126,7 +128,7 @@ func TestParallelGetFillsCacheOnce(t *testing.T) {
 
 func TestGetRespectsContexts(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 50*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	baseCtx := context.Background()
 
@@ -136,8 +138,8 @@ func TestGetRespectsContexts(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected context cancelation")
 	}
-	if len(c.cache) > 0 {
-		t.Errorf("expected empty cache after timeout, got %#v", c.cache)
+	if c.Size() > 0 {
+		t.Errorf("expected empty cache after timeout, got %d entries", c.Size())
 	}
 
 	// now give it time to fill the cache
@@ -166,14 +168,14 @@ func TestGetDoesNotCacheOnError(t *testing.T) {
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 10*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	_, err := c.Get(context.Background(), "foo")
 	if err == nil || err.Error() != "error" {
 		t.Errorf("expected error, got: %s", err)
 	}
-	if len(c.cache) != 0 {
-		t.Errorf("expected empty cache after error, got %#v", c.cache)
+	if c.Size() != 0 {
+		t.Errorf("expected empty cache after timeout, got %d entries", c.Size())
 	}
 }
 
@@ -182,7 +184,7 @@ func TestGetPropagatesErrorsToAllCallers(t *testing.T) {
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 100*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -204,7 +206,7 @@ func TestGetPropagatesErrorsToAllCallers(t *testing.T) {
 
 func TestUpdateRespectsContexts(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 50*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	baseCtx := context.Background()
 
@@ -214,8 +216,8 @@ func TestUpdateRespectsContexts(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected context cancelation")
 	}
-	if len(c.cache) > 0 {
-		t.Errorf("expected empty cache after timeout, got %#v", c.cache)
+	if c.Size() > 0 {
+		t.Errorf("expected empty cache after timeout, got %d entries", c.Size())
 	}
 
 	// now give it time to fill the cache
@@ -223,7 +225,7 @@ func TestUpdateRespectsContexts(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
-	if len(c.cache) != 1 {
+	if c.Size() != 1 {
 		t.Errorf("expected cache to be updated")
 	}
 }
@@ -233,20 +235,20 @@ func TestUpdateDoesNotCacheOnError(t *testing.T) {
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 10*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	_, err := c.Update(context.Background(), "foo")
 	if err == nil || err.Error() != "error" {
 		t.Errorf("expected error, got: %s", err)
 	}
-	if len(c.cache) != 0 {
-		t.Errorf("expected empty cache after error, got %#v", c.cache)
+	if c.Size() != 0 {
+		t.Errorf("expected empty cache after timeout, got %d entries", c.Size())
 	}
 }
 
 func TestParallelUpdateFillsCacheOnce(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -268,7 +270,7 @@ func TestParallelUpdateFillsCacheOnce(t *testing.T) {
 
 func TestParallelGetsAndUpdatesFillCacheOnce(t *testing.T) {
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -312,7 +314,7 @@ func TestWaiterRespectsContexts(t *testing.T) {
 	// The cache fill should succeed, because there was no timeout applied to
 	// the context that triggered the fill.
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	var wg sync.WaitGroup
 
@@ -368,7 +370,7 @@ func TestFillSuccessDeterminedByFirstContext(t *testing.T) {
 	//
 	// Afterwards, the cache will still be empty.
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := New(f.filler)
+	c := fillcache.New(f.filler)
 
 	var wg sync.WaitGroup
 
@@ -399,8 +401,8 @@ func TestFillSuccessDeterminedByFirstContext(t *testing.T) {
 		t.Errorf("expected %d call to fill func, got %d", 1, count)
 	}
 
-	if len(c.cache) != 0 {
-		t.Errorf("expected empty cache after fill failures, got cache size %d", len(c.cache))
+	if c.Size() != 0 {
+		t.Errorf("expected empty cache after fill failures, got cache size %d", c.Size())
 	}
 }
 
@@ -409,7 +411,7 @@ func TestExpiration(t *testing.T) {
 	val := 1
 	ttl := 25 * time.Millisecond
 	f := newSimpleFiller(key, val, time.Duration(0))
-	c := New(f.filler, TTL(ttl))
+	c := fillcache.New(f.filler, fillcache.TTL(ttl))
 
 	for i := 0; i < 15; i++ {
 		result, err := c.Get(context.Background(), key)

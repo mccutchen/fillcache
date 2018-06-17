@@ -23,7 +23,7 @@ type Cache struct {
 
 	cache    map[string]*cacheEntry
 	inflight map[string]*fillRequest
-	mu       sync.Mutex
+	mu       sync.RWMutex
 }
 
 // New creates a FillCache whose entries will be computed by the given Filler
@@ -84,6 +84,13 @@ func (c *Cache) Update(ctx context.Context, key string) (interface{}, error) {
 		c.cache[key] = newCacheEntry(val, c.ttl)
 	}
 	return val, err
+}
+
+// Size returns the number of entries in the cache
+func (c *Cache) Size() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.cache)
 }
 
 // Option can be used to configure a FillCache instance
