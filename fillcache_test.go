@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -426,5 +427,62 @@ func TestExpiration(t *testing.T) {
 
 	if count := f.callCount(key); count != 2 {
 		t.Errorf("expected 2 calls to fill func, got %d", count)
+	}
+}
+
+func TestServeStale(t *testing.T) {
+	key := "foo"
+	val := int64(0)
+	ttl := 10 * time.Millisecond
+	fillDelay := 25 * time.Millisecond
+
+	// Our fill function simply increments its value every time it is called
+	filler := func(ctx context.Context, key string) (interface{}, error) {
+		atomic.AddInt64(&val, 1)
+		select {
+		case <-time.After(fillDelay):
+			return val, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	c := fillcache.New(filler, fillcache.TTL(ttl), fillcache.ServeStale(true))
+
+	// First fill succeeds
+	result, err := c.Get(context.Background(), key)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if val := result.(int64); val != 1 {
+		t.Errorf("expected val = 1, got %d", val)
+	}
+
+	// Wait for value to expire
+	<-time.After(ttl * 2)
+
+	// Second fill fails due to low timeout on calling context, but stale value
+	// is returned without an error because serveStale == true
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+	result, err = c.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if val := result.(int64); val != 1 {
+		t.Errorf("expected val = 1, got %d", val)
+	}
+
+	// Value is still expired due to error, so third fill succeeds without
+	// needing to wait. Here we get a value of 3 because this will trigger our
+	// 3rd call to the fill function.
+	ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	result, err = c.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if val := result.(int64); val != 3 {
+		t.Errorf("expected val = 3, got %d", val)
 	}
 }

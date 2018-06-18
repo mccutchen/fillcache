@@ -21,6 +21,10 @@ type Cache struct {
 	// expire
 	ttl time.Duration
 
+	// if a cache value has expired, should the stale value be used if an error
+	// is encountered during update?
+	serveStale bool
+
 	cache    map[string]*cacheEntry
 	inflight map[string]*fillRequest
 	mu       sync.RWMutex
@@ -50,7 +54,16 @@ func (c *Cache) Get(ctx context.Context, key string) (interface{}, error) {
 	if found && !entry.expired() {
 		return entry.val, nil
 	}
-	return c.Update(ctx, key)
+	val, err := c.Update(ctx, key)
+	if err != nil {
+		if c.serveStale && found {
+			// TODO: should this return something like ErrStaleResults so that
+			// consumers know an error occurred?
+			return entry.val, nil
+		}
+		return nil, err
+	}
+	return val, err
 }
 
 // Update recomputes, stores, and returns the value for the given key. If an
@@ -101,6 +114,14 @@ type Option func(c *Cache)
 func TTL(ttl time.Duration) Option {
 	return func(c *Cache) {
 		c.ttl = ttl
+	}
+}
+
+// ServeStale configures the cache to serve the stale value if an error occurs
+// while updating
+func ServeStale(serveStale bool) Option {
+	return func(c *Cache) {
+		c.serveStale = serveStale
 	}
 }
 
