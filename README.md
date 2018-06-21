@@ -30,11 +30,13 @@ make test
 ## Credits
 
 If you like this package, all credit should go to [@jphines][jphines], who
-suggested the design as we were working through an in-process DNS caching
-mechanism.
+suggested the initial design as we were working through an in-process DNS
+caching mechanism.
 
-If you don't like its design or its implementation, all blame lies with me.
+If you don't like its design or its implementation, all blame lies with
+[@mccutchen][mccutchen].
 
 
 [singleflight]: https://godoc.org/golang.org/x/sync/singleflight
 [jphines]: https://github.com/jphines
+[mccutchen]: https://github.com/mccutchen
