@@ -1,8 +1,9 @@
 # fillcache
 
-[![GoDoc](https://godoc.org/github.com/mccutchen/fillcache?status.svg)](https://godoc.org/github.com/mccutchen/fillcache)
-[![Build Status](https://travis-ci.org/mccutchen/fillcache.svg?branch=master)](http://travis-ci.org/mccutchen/fillcache)
-[![Coverage](https://coveralls.io/repos/github/mccutchen/fillcache/badge.svg?branch=master)](https://coveralls.io/github/mccutchen/fillcache?branch=master)
+[![Documentation](https://pkg.go.dev/badge/github.com/mccutchen/fillcache)](https://pkg.go.dev/github.com/mccutchen/fillcache)
+[![Build status](https://github.com/mccutchen/fillcache/actions/workflows/test.yaml/badge.svg)](https://github.com/mccutchen/fillcache/actions/workflows/test.yaml)
+[![Code coverage](https://codecov.io/gh/mccutchen/fillcache/branch/main/graph/badge.svg)](https://codecov.io/gh/mccutchen/fillcache)
+[![Go report card](http://goreportcard.com/badge/github.com/mccutchen/fillcache)](https://goreportcard.com/report/github.com/mccutchen/fillcache)
 
 An in-process cache with single-flight filling semantics.
 
