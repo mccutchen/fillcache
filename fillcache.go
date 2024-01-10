@@ -12,10 +12,16 @@ import (
 	"time"
 )
 
-// Cache is a cache whose entries are calculated and filled on-demand
-type Cache struct {
+// Config configures a Cache.
+type Config struct {
+	TTL        time.Duration
+	ServeStale bool
+}
+
+// Cache is a cache whose entries are calculated and filled on-demand.
+type Cache[T any] struct {
 	// a function that knows how to compute the value for a cache key
-	filler Filler
+	filler Filler[T]
 
 	// an optional TTL for cache entries; if unset, cache entries never
 	// expire
@@ -25,29 +31,30 @@ type Cache struct {
 	// is encountered during update?
 	serveStale bool
 
-	cache    map[string]*cacheEntry
-	inflight map[string]*fillRequest
+	cache    map[string]*cacheEntry[T]
+	inflight map[string]*fillRequest[T]
 	mu       sync.RWMutex
 }
 
-// New creates a FillCache whose entries will be computed by the given Filler
-func New(filler Filler, opts ...Option) *Cache {
-	c := &Cache{
+// New creates a Cache whose entries will be computed by the given Filler.
+func New[T any](filler Filler[T], cfg *Config) *Cache[T] {
+	c := &Cache[T]{
 		filler:   filler,
-		cache:    make(map[string]*cacheEntry),
-		inflight: make(map[string]*fillRequest),
+		cache:    make(map[string]*cacheEntry[T]),
+		inflight: make(map[string]*fillRequest[T]),
 	}
-	for _, o := range opts {
-		o(c)
+	if cfg != nil {
+		c.ttl = cfg.TTL
+		c.serveStale = cfg.ServeStale
 	}
 	return c
 }
 
-// Filler is a function that computes the value to cache for a given key
-type Filler func(ctx context.Context, key string) (val interface{}, err error)
+// Filler is a function that computes the value to cache for a given key.
+type Filler[T any] func(ctx context.Context, key string) (val T, err error)
 
-// Get returns the cache value for the given key, computing it as necessary
-func (c *Cache) Get(ctx context.Context, key string) (interface{}, error) {
+// Get returns the cache value for the given key, computing it as necessary.
+func (c *Cache[T]) Get(ctx context.Context, key string) (T, error) {
 	c.mu.Lock()
 	entry, found := c.cache[key]
 	c.mu.Unlock()
@@ -61,7 +68,8 @@ func (c *Cache) Get(ctx context.Context, key string) (interface{}, error) {
 			// consumers know an error occurred?
 			return entry.val, nil
 		}
-		return nil, err
+		var zero T
+		return zero, err
 	}
 	return val, err
 }
@@ -71,7 +79,7 @@ func (c *Cache) Get(ctx context.Context, key string) (interface{}, error) {
 //
 // Update can be used to proactively update cache entries without waiting for a
 // Get.
-func (c *Cache) Update(ctx context.Context, key string) (interface{}, error) {
+func (c *Cache[T]) Update(ctx context.Context, key string) (T, error) {
 	c.mu.Lock()
 
 	// Another goroutine is updating this entry, just wait for it to finish
@@ -81,7 +89,7 @@ func (c *Cache) Update(ctx context.Context, key string) (interface{}, error) {
 	}
 
 	// Otherwise, we'll update this entry ourselves
-	r := &fillRequest{}
+	r := &fillRequest[T]{}
 	r.wg.Add(1)
 	c.inflight[key] = r
 	c.mu.Unlock()
@@ -101,61 +109,43 @@ func (c *Cache) Update(ctx context.Context, key string) (interface{}, error) {
 }
 
 // Size returns the number of entries in the cache
-func (c *Cache) Size() int {
+func (c *Cache[T]) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.cache)
 }
 
-// Option can be used to configure a Cache instance
-type Option func(c *Cache)
-
-// TTL sets the expiration time for each cache entry
-func TTL(ttl time.Duration) Option {
-	return func(c *Cache) {
-		c.ttl = ttl
-	}
-}
-
-// ServeStale configures the cache to serve the stale value if an error occurs
-// while updating
-func ServeStale(serveStale bool) Option {
-	return func(c *Cache) {
-		c.serveStale = serveStale
-	}
-}
-
 // cacheEntry captures a cached value and its optional expiration time
-type cacheEntry struct {
-	val       interface{}
+type cacheEntry[T any] struct {
+	val       T
 	expiresAt time.Time
 }
 
-func newCacheEntry(val interface{}, ttl time.Duration) *cacheEntry {
+func newCacheEntry[T any](val T, ttl time.Duration) *cacheEntry[T] {
 	var expiresAt time.Time
 	if ttl > 0 {
 		expiresAt = time.Now().Add(ttl)
 	}
-	return &cacheEntry{
+	return &cacheEntry[T]{
 		val:       val,
 		expiresAt: expiresAt,
 	}
 }
 
-func (e *cacheEntry) expired() bool {
+func (e *cacheEntry[T]) expired() bool {
 	return !e.expiresAt.IsZero() && e.expiresAt.Before(time.Now())
 }
 
 // fillRequest represents an outstanding computation of the value for a cache
 // key
-type fillRequest struct {
-	val interface{}
+type fillRequest[T any] struct {
+	val T
 	err error
 
 	wg sync.WaitGroup
 }
 
-func (r *fillRequest) wait(ctx context.Context) (interface{}, error) {
+func (r *fillRequest[T]) wait(ctx context.Context) (T, error) {
 	done := make(chan struct{})
 	go func() {
 		r.wg.Wait()
@@ -164,13 +154,14 @@ func (r *fillRequest) wait(ctx context.Context) (interface{}, error) {
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		var zero T
+		return zero, ctx.Err()
 	case <-done:
 		return r.val, r.err
 	}
 }
 
-func (r *fillRequest) finish(val interface{}, err error) {
+func (r *fillRequest[T]) finish(val T, err error) {
 	r.val = val
 	r.err = err
 	r.wg.Done()
