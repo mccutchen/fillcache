@@ -68,8 +68,10 @@ func (t *testFiller) filler(ctx context.Context, key string) (interface{}, error
 }
 
 func TestGetFillsCache(t *testing.T) {
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 10*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 	ctx := context.Background()
 
 	// first get should compute the expected result
@@ -102,8 +104,10 @@ func TestGetFillsCache(t *testing.T) {
 }
 
 func TestParallelGetFillsCacheOnce(t *testing.T) {
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -128,8 +132,10 @@ func TestParallelGetFillsCacheOnce(t *testing.T) {
 }
 
 func TestGetRespectsContexts(t *testing.T) {
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 50*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	baseCtx := context.Background()
 
@@ -165,11 +171,13 @@ func TestGetRespectsContexts(t *testing.T) {
 }
 
 func TestGetDoesNotCacheOnError(t *testing.T) {
+	t.Parallel()
+
 	results := map[string]result{
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 10*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	_, err := c.Get(context.Background(), "foo")
 	if err == nil || err.Error() != "error" {
@@ -181,11 +189,13 @@ func TestGetDoesNotCacheOnError(t *testing.T) {
 }
 
 func TestGetPropagatesErrorsToAllCallers(t *testing.T) {
+	t.Parallel()
+
 	results := map[string]result{
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 100*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -206,8 +216,10 @@ func TestGetPropagatesErrorsToAllCallers(t *testing.T) {
 }
 
 func TestUpdateRespectsContexts(t *testing.T) {
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 50*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	baseCtx := context.Background()
 
@@ -232,11 +244,13 @@ func TestUpdateRespectsContexts(t *testing.T) {
 }
 
 func TestUpdateDoesNotCacheOnError(t *testing.T) {
+	t.Parallel()
+
 	results := map[string]result{
 		"foo": {err: errors.New("error")},
 	}
 	f := newTestFiller(results, 10*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	_, err := c.Update(context.Background(), "foo")
 	if err == nil || err.Error() != "error" {
@@ -248,8 +262,10 @@ func TestUpdateDoesNotCacheOnError(t *testing.T) {
 }
 
 func TestParallelUpdateFillsCacheOnce(t *testing.T) {
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -270,8 +286,10 @@ func TestParallelUpdateFillsCacheOnce(t *testing.T) {
 }
 
 func TestParallelGetsAndUpdatesFillCacheOnce(t *testing.T) {
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -314,8 +332,10 @@ func TestWaiterRespectsContexts(t *testing.T) {
 	//
 	// The cache fill should succeed, because there was no timeout applied to
 	// the context that triggered the fill.
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	var wg sync.WaitGroup
 
@@ -370,8 +390,10 @@ func TestFillSuccessDeterminedByFirstContext(t *testing.T) {
 	// will be waiting on the same cache fill and so will also fail.
 	//
 	// Afterwards, the cache will still be empty.
+	t.Parallel()
+
 	f := newSimpleFiller("foo", 1, 200*time.Millisecond)
-	c := fillcache.New(f.filler)
+	c := fillcache.New(f.filler, nil)
 
 	var wg sync.WaitGroup
 
@@ -408,11 +430,13 @@ func TestFillSuccessDeterminedByFirstContext(t *testing.T) {
 }
 
 func TestExpiration(t *testing.T) {
+	t.Parallel()
+
 	key := "foo"
 	val := 1
 	ttl := 25 * time.Millisecond
 	f := newSimpleFiller(key, val, time.Duration(0))
-	c := fillcache.New(f.filler, fillcache.TTL(ttl))
+	c := fillcache.New(f.filler, &fillcache.Config{TTL: ttl})
 
 	for i := 0; i < 15; i++ {
 		result, err := c.Get(context.Background(), key)
@@ -431,6 +455,8 @@ func TestExpiration(t *testing.T) {
 }
 
 func TestServeStale(t *testing.T) {
+	t.Parallel()
+
 	key := "foo"
 	val := int64(0)
 	ttl := 10 * time.Millisecond
@@ -447,7 +473,7 @@ func TestServeStale(t *testing.T) {
 		}
 	}
 
-	c := fillcache.New(filler, fillcache.TTL(ttl), fillcache.ServeStale(true))
+	c := fillcache.New(filler, &fillcache.Config{TTL: ttl, ServeStale: true})
 
 	// First fill succeeds
 	result, err := c.Get(context.Background(), key)
