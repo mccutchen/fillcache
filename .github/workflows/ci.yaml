@@ -32,6 +32,8 @@ jobs:
       run: make testci
     - uses: codecov/codecov-action@v4
       if: ${{ matrix.go-version == 'stable' }}
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
     runs-on: ubuntu-latest
