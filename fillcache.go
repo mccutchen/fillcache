@@ -89,8 +89,7 @@ func (c *Cache[T]) Update(ctx context.Context, key string) (T, error) {
 	}
 
 	// Otherwise, we'll update this entry ourselves
-	r := &fillRequest[T]{}
-	r.wg.Add(1)
+	r := newFillRequest[T]()
 	c.inflight[key] = r
 	c.mu.Unlock()
 
@@ -139,24 +138,23 @@ func (e *cacheEntry[T]) expired() bool {
 // fillRequest represents an outstanding computation of the value for a cache
 // key
 type fillRequest[T any] struct {
-	val T
-	err error
+	val  T
+	err  error
+	done chan struct{}
+}
 
-	wg sync.WaitGroup
+func newFillRequest[T any]() *fillRequest[T] {
+	return &fillRequest[T]{
+		done: make(chan struct{}),
+	}
 }
 
 func (r *fillRequest[T]) wait(ctx context.Context) (T, error) {
-	done := make(chan struct{})
-	go func() {
-		r.wg.Wait()
-		close(done)
-	}()
-
 	select {
 	case <-ctx.Done():
 		var zero T
 		return zero, ctx.Err()
-	case <-done:
+	case <-r.done:
 		return r.val, r.err
 	}
 }
@@ -164,5 +162,5 @@ func (r *fillRequest[T]) wait(ctx context.Context) (T, error) {
 func (r *fillRequest[T]) finish(val T, err error) {
 	r.val = val
 	r.err = err
-	r.wg.Done()
+	close(r.done)
 }
