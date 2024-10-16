@@ -1,7 +1,7 @@
 # fillcache
 
 [![Documentation](https://pkg.go.dev/badge/github.com/mccutchen/fillcache)](https://pkg.go.dev/github.com/mccutchen/fillcache)
-[![Build status](https://github.com/mccutchen/fillcache/actions/workflows/test.yaml/badge.svg)](https://github.com/mccutchen/fillcache/actions/workflows/test.yaml)
+[![Build status](https://github.com/mccutchen/fillcache/actions/workflows/ci.yaml/badge.svg)](https://github.com/mccutchen/fillcache/actions/workflows/ci.yaml)
 [![Code coverage](https://codecov.io/gh/mccutchen/fillcache/branch/main/graph/badge.svg)](https://codecov.io/gh/mccutchen/fillcache)
 [![Go report card](http://goreportcard.com/badge/github.com/mccutchen/fillcache)](https://goreportcard.com/report/github.com/mccutchen/fillcache)
 
